@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useShallow } from 'zustand/shallow';
 import type { SystemStats, EventLog, ConnectionStatus } from '@/types';
 
 interface SystemState {
@@ -40,3 +41,54 @@ export const useSystemStore = create<SystemState>((set) => ({
 
   setConnectionStatus: (status) => set({ connectionStatus: status }),
 }));
+
+// === 細粒度 Selectors ===
+// 使用這些 selectors 可以減少不必要的組件重新渲染
+
+/**
+ * 僅訂閱連線狀態
+ */
+export const useConnectionStatus = () =>
+  useSystemStore((state) => state.connectionStatus);
+
+/**
+ * 僅訂閱 CPU 和記憶體使用率
+ */
+export const useCpuMemory = () =>
+  useSystemStore(
+    useShallow((state) =>
+      state.stats
+        ? { cpu: state.stats.cpu, memory: state.stats.memory }
+        : null
+    )
+  );
+
+/**
+ * 僅訂閱活躍 PTY 數量
+ */
+export const useActivePty = () =>
+  useSystemStore((state) => state.stats?.activePty ?? 0);
+
+/**
+ * 僅訂閱 WebSocket 連線數
+ */
+export const useWsConnections = () =>
+  useSystemStore((state) => state.stats?.wsConnections ?? 0);
+
+/**
+ * 僅訂閱 Claude 使用統計
+ */
+export const useClaudeUsage = () =>
+  useSystemStore(useShallow((state) => state.stats?.claudeUsage ?? null));
+
+/**
+ * 僅訂閱 Rate Limit 資訊
+ */
+export const useRateLimit = () =>
+  useSystemStore(useShallow((state) => state.stats?.rateLimit ?? null));
+
+/**
+ * 僅訂閱日誌列表
+ */
+export const useLogs = () =>
+  useSystemStore((state) => state.logs);

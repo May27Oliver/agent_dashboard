@@ -1,10 +1,20 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { useAgentSubscription } from '@/hooks/useAgentSubscription';
 import '@xterm/xterm/css/xterm.css';
 
 // 使用 Map 直接存儲終端實例，避免全域事件系統的效能問題
 const terminalRegistry = new Map<string, Terminal>();
+
+// 防抖函數
+function debounce<T extends (...args: unknown[]) => void>(fn: T, delay: number): T {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  return ((...args: unknown[]) => {
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  }) as T;
+}
 
 interface XTerminalProps {
   agentId: string;
@@ -27,6 +37,9 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
   // Use refs to store callbacks to avoid re-initializing terminal
   const onInputRef = useRef(onInput);
   const onResizeRef = useRef(onResize);
+
+  // 訂閱此 agent 的輸出
+  useAgentSubscription(agentId);
 
   // Keep refs up to date
   useEffect(() => {
@@ -96,13 +109,16 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
       onInputRef.current?.(data);
     });
 
-    const resizeObserver = new ResizeObserver(() => {
+    // 使用防抖處理 resize，避免頻繁觸發
+    const handleResize = debounce(() => {
       if (fitAddonRef.current && xtermRef.current) {
         fitAddonRef.current.fit();
         const { cols, rows } = xtermRef.current;
         onResizeRef.current?.(cols, rows);
       }
-    });
+    }, 100);
+
+    const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(terminalRef.current);
 
     return () => {

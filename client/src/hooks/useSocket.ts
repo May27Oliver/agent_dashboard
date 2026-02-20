@@ -1,226 +1,111 @@
-import { useEffect, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { useCallback } from 'react';
+import { useSocketContext } from '@/contexts/SocketContext';
 import { useAgentStore } from '@/store/agentStore';
-import { useSystemStore } from '@/store/systemStore';
-import { useSettingsStore } from '@/store/settingsStore';
-import { writeToTerminal } from '@/components/Terminal/XTerminal';
 import type {
-  Agent,
   AgentConfig,
   WorkflowDefinition,
   CollaborativeWorkflowRequest,
-  ApprovalRequest,
-  SystemStats,
-  EventLog,
   FullSettings,
 } from '@/types';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
-
-// Singleton socket instance
-let socketInstance: Socket | null = null;
-let isInitialized = false;
-
-function getSocket(): Socket {
-  if (!socketInstance) {
-    socketInstance = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-    });
-  }
-  return socketInstance;
-}
-
+/**
+ * Socket action hook
+ * 只提供 socket actions，事件監聽由 useSocketEvents 統一管理
+ */
 export function useSocket() {
-  useEffect(() => {
-    // Only initialize event listeners once
-    if (isInitialized) return;
-    isInitialized = true;
+  const { socket } = useSocketContext();
 
-    const socket = getSocket();
-    useSystemStore.getState().setConnectionStatus('connecting');
-
-    socket.on('connect', () => {
-      useSystemStore.getState().setConnectionStatus('online');
-    });
-
-    socket.on('disconnect', () => {
-      useSystemStore.getState().setConnectionStatus('offline');
-    });
-
-    // System events
-    socket.on('system:stats', (stats: SystemStats) => {
-      useSystemStore.getState().setStats(stats);
-    });
-
-    socket.on('system:log', (log: EventLog) => {
-      useSystemStore.getState().addLog(log);
-    });
-
-    socket.on('agent:sync', (agents: Agent[]) => {
-      useAgentStore.getState().syncAgents(agents);
-    });
-
-    socket.on('workflow:sync', (workflows: import('@/types').Workflow[]) => {
-      useAgentStore.getState().syncWorkflows(workflows);
-    });
-
-    socket.on('agent:created', (agent) => {
-      useAgentStore.getState().addAgent(agent);
-    });
-
-    socket.on('agent:updated', (agent) => {
-      useAgentStore.getState().updateAgent(agent);
-    });
-
-    socket.on('agent:removed', (agentId) => {
-      useAgentStore.getState().removeAgent(agentId);
-    });
-
-    socket.on('agent:restarted', (agent) => {
-      useAgentStore.getState().updateAgent(agent);
-    });
-
-    socket.on('agent:output', (output: { agentId: string; data: string }) => {
-      writeToTerminal(output.agentId, output.data);
-    });
-
-    socket.on('workflow:created', (workflow) => {
-      useAgentStore.getState().addWorkflow(workflow);
-    });
-
-    socket.on('workflow:updated', (workflow) => {
-      useAgentStore.getState().updateWorkflow(workflow);
-    });
-
-    socket.on('workflow:stepChanged', ({ workflowId, step }) => {
-      useAgentStore.getState().updateWorkflowStep(workflowId, step);
-    });
-
-    socket.on('workflow:approvalRequired', (request: ApprovalRequest) => {
-      useAgentStore.getState().addPendingApproval(request);
-    });
-
-    socket.on('workflow:deleted', (workflowId: string) => {
-      useAgentStore.getState().removeWorkflow(workflowId);
-    });
-
-    // Settings events
-    socket.on('settings:updated', (settings: FullSettings) => {
-      useSettingsStore.getState().setSettings(settings);
-    });
-
-    // Request initial settings on connect
-    socket.on('connect', () => {
-      socket.emit('settings:get');
-    });
-
-    socket.on('settings:response', (settings: FullSettings) => {
-      useSettingsStore.getState().initFromServer(settings);
-    });
-
-    // If already connected, request settings immediately
-    if (socket.connected) {
-      socket.emit('settings:get');
-    }
-
-    // No cleanup - socket persists for app lifetime
-  }, []);
-
+  // === Agent Actions ===
   const createAgent = useCallback((config: AgentConfig) => {
-    const socket = getSocket();
     socket.emit('agent:create', config);
-  }, []);
+  }, [socket]);
 
   const sendCommand = useCallback((agentId: string, command: string) => {
-    getSocket().emit('agent:command', { agentId, command });
-  }, []);
+    socket.emit('agent:command', { agentId, command });
+  }, [socket]);
 
   const sendInput = useCallback((agentId: string, data: string) => {
-    getSocket().emit('agent:input', { agentId, data });
-  }, []);
+    socket.emit('agent:input', { agentId, data });
+  }, [socket]);
 
   const resizeTerminal = useCallback(
     (agentId: string, cols: number, rows: number) => {
-      getSocket().emit('agent:resize', { agentId, cols, rows });
+      socket.emit('agent:resize', { agentId, cols, rows });
     },
-    []
+    [socket]
   );
 
   const removeAgentById = useCallback((agentId: string) => {
-    getSocket().emit('agent:remove', agentId);
-  }, []);
+    socket.emit('agent:remove', agentId);
+  }, [socket]);
 
   const restartAgent = useCallback((agentId: string) => {
-    getSocket().emit('agent:restart', agentId);
-  }, []);
+    socket.emit('agent:restart', agentId);
+  }, [socket]);
 
+  // === Workflow Actions ===
   const createWorkflow = useCallback((definition: WorkflowDefinition) => {
-    getSocket().emit('workflow:create', definition);
-  }, []);
+    socket.emit('workflow:create', definition);
+  }, [socket]);
 
   const startWorkflow = useCallback((workflowId: string) => {
-    getSocket().emit('workflow:start', workflowId);
-  }, []);
+    socket.emit('workflow:start', workflowId);
+  }, [socket]);
 
   const pauseWorkflow = useCallback((workflowId: string) => {
-    getSocket().emit('workflow:pause', workflowId);
-  }, []);
+    socket.emit('workflow:pause', workflowId);
+  }, [socket]);
 
   const resumeWorkflow = useCallback((workflowId: string) => {
-    getSocket().emit('workflow:resume', workflowId);
-  }, []);
+    socket.emit('workflow:resume', workflowId);
+  }, [socket]);
 
   const stopWorkflow = useCallback((workflowId: string) => {
-    getSocket().emit('workflow:stop', workflowId);
-  }, []);
+    socket.emit('workflow:stop', workflowId);
+  }, [socket]);
 
   const markStepComplete = useCallback(
     (workflowId: string, stepId: string, success: boolean) => {
-      getSocket().emit('workflow:stepComplete', {
+      socket.emit('workflow:stepComplete', {
         workflowId,
         stepId,
         success,
       });
     },
-    []
+    [socket]
   );
 
   const createCollaborativeWorkflow = useCallback(
     (request: CollaborativeWorkflowRequest) => {
-      getSocket().emit('workflow:createCollaborative', request);
+      socket.emit('workflow:createCollaborative', request);
     },
-    []
+    [socket]
   );
 
   const approveStep = useCallback(
     (workflowId: string, stepId: string, comment?: string) => {
-      getSocket().emit('workflow:approve', { workflowId, stepId, comment });
+      socket.emit('workflow:approve', { workflowId, stepId, comment });
       useAgentStore.getState().removePendingApproval(workflowId, stepId);
     },
-    []
+    [socket]
   );
 
   const rejectStep = useCallback(
     (workflowId: string, stepId: string, comment: string, retry?: boolean) => {
-      getSocket().emit('workflow:reject', { workflowId, stepId, comment, retry });
+      socket.emit('workflow:reject', { workflowId, stepId, comment, retry });
       useAgentStore.getState().removePendingApproval(workflowId, stepId);
     },
-    []
+    [socket]
   );
 
   const deleteWorkflow = useCallback((workflowId: string) => {
-    getSocket().emit('workflow:delete', workflowId);
-  }, []);
+    socket.emit('workflow:delete', workflowId);
+  }, [socket]);
 
+  // === File System Actions ===
   const listDirs = useCallback(
     (dirPath: string): Promise<{ name: string; path: string }[]> => {
       return new Promise((resolve) => {
-        const socket = getSocket();
         const requestId = Math.random().toString(36).substring(7);
         const handler = (response: { requestId: string; dirs: { name: string; path: string }[] }) => {
           if (response.requestId === requestId) {
@@ -232,12 +117,12 @@ export function useSocket() {
         socket.emit('fs:listDirs', { dirPath, requestId });
       });
     },
-    []
+    [socket]
   );
 
+  // === Settings Actions ===
   const getSettings = useCallback((): Promise<FullSettings> => {
     return new Promise((resolve) => {
-      const socket = getSocket();
       const handler = (settings: FullSettings) => {
         socket.off('settings:response', handler);
         resolve(settings);
@@ -245,14 +130,23 @@ export function useSocket() {
       socket.on('settings:response', handler);
       socket.emit('settings:get');
     });
-  }, []);
+  }, [socket]);
 
   const updateSettings = useCallback((settings: Partial<FullSettings>) => {
-    getSocket().emit('settings:update', settings);
-  }, []);
+    socket.emit('settings:update', settings);
+  }, [socket]);
+
+  // === Agent Subscription Actions ===
+  const subscribeAgent = useCallback((agentId: string) => {
+    socket.emit('agent:subscribe', agentId);
+  }, [socket]);
+
+  const unsubscribeAgent = useCallback((agentId: string) => {
+    socket.emit('agent:unsubscribe', agentId);
+  }, [socket]);
 
   return {
-    socket: getSocket(),
+    socket,
     createAgent,
     sendCommand,
     sendInput,
@@ -272,5 +166,7 @@ export function useSocket() {
     listDirs,
     getSettings,
     updateSettings,
+    subscribeAgent,
+    unsubscribeAgent,
   };
 }
