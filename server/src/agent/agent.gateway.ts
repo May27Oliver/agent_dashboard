@@ -8,11 +8,11 @@ import {
   ConnectedSocket,
   OnGatewayInit,
 } from '@nestjs/websockets';
-import { Inject, forwardRef } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { AgentService } from './agent.service';
+import { OutputBufferService } from './output-buffer.service';
 import { WorkflowService } from '../workflow/workflow.service';
-import { AgentConfig, Agent, TerminalOutput } from '../types';
+import { AgentConfig, Agent } from '../types';
 import * as fs from 'fs';
 import * as path from 'path';
 import { expandTilde, isPathAllowed } from '../utils/shell';
@@ -29,7 +29,10 @@ export class AgentGateway implements OnGatewayConnection, OnGatewayDisconnect, O
 
   private workflowService: WorkflowService | null = null;
 
-  constructor(private readonly agentService: AgentService) {}
+  constructor(
+    private readonly agentService: AgentService,
+    private readonly outputBufferService: OutputBufferService,
+  ) {}
 
   // WorkflowService 會在初始化後注入自己
   setWorkflowService(workflowService: WorkflowService) {
@@ -40,21 +43,35 @@ export class AgentGateway implements OnGatewayConnection, OnGatewayDisconnect, O
     // Gateway 初始化後恢復 agents
     const restoredAgents = await this.agentService.restoreAgents(
       (agentId, data) => {
-        const output: TerminalOutput = {
-          agentId,
-          data,
-          timestamp: Date.now(),
-        };
-        this.server.emit('agent:output', output);
+        // 使用 OutputBuffer 累積輸出
+        this.outputBufferService.append(agentId, data);
       },
       (updatedAgent) => {
         this.server.emit('agent:updated', updatedAgent);
       },
     );
 
+    // 為恢復的 agents 註冊 output buffer
+    for (const agent of restoredAgents) {
+      this.registerAgentOutputBuffer(agent.id);
+    }
+
     if (restoredAgents.length > 0) {
       console.log(`[AgentGateway] Restored ${restoredAgents.length} agents`);
     }
+  }
+
+  /**
+   * 為 agent 註冊輸出緩衝區
+   */
+  private registerAgentOutputBuffer(agentId: string): void {
+    this.outputBufferService.registerAgent(agentId, (data) => {
+      this.server.emit('agent:output', {
+        agentId,
+        data,
+        timestamp: Date.now(),
+      });
+    });
   }
 
   async handleConnection(client: Socket) {
@@ -79,23 +96,21 @@ export class AgentGateway implements OnGatewayConnection, OnGatewayDisconnect, O
   @SubscribeMessage('agent:create')
   async handleCreateAgent(
     @MessageBody() config: AgentConfig,
-    @ConnectedSocket() client: Socket,
   ): Promise<Agent> {
     console.log('[AgentGateway] Received agent:create event:', config);
     const agent = await this.agentService.createAgent(
       config,
       (agentId, data) => {
-        const output: TerminalOutput = {
-          agentId,
-          data,
-          timestamp: Date.now(),
-        };
-        this.server.emit('agent:output', output);
+        // 使用 OutputBuffer 累積輸出
+        this.outputBufferService.append(agentId, data);
       },
       (updatedAgent) => {
         this.server.emit('agent:updated', updatedAgent);
       },
     );
+
+    // 為新 agent 註冊輸出緩衝區
+    this.registerAgentOutputBuffer(agent.id);
 
     this.server.emit('agent:created', agent);
     return agent;
@@ -128,6 +143,9 @@ export class AgentGateway implements OnGatewayConnection, OnGatewayDisconnect, O
 
   @SubscribeMessage('agent:remove')
   async handleRemoveAgent(@MessageBody() agentId: string): Promise<boolean> {
+    // 取消註冊輸出緩衝區
+    this.outputBufferService.unregisterAgent(agentId);
+
     const result = await this.agentService.removeAgent(agentId);
     if (result) {
       this.server.emit('agent:removed', agentId);

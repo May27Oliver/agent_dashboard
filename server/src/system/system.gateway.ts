@@ -69,6 +69,7 @@ export class SystemGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const initialStats = this.systemService.getStats();
     console.log('[SystemGateway] Sending initial basic stats');
 
+    // 從 2 秒改為 5 秒，減少廣播頻率以提升效能
     this.statsInterval = setInterval(async () => {
       try {
         const stats = await this.getStatsWithClaudeUsage();
@@ -100,7 +101,7 @@ export class SystemGateway implements OnGatewayConnection, OnGatewayDisconnect {
           rateLimit: null,
         });
       }
-    }, 2000);
+    }, 5000);
   }
 
   private async getStatsWithClaudeUsage(): Promise<SystemStatsResponse> {

@@ -20,6 +20,7 @@ export class RateLimitService {
   private cache: RateLimitInfo | null = null;
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 分鐘
   private readonly API_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+  private hasWarnedNoApiKey = false;
 
   async getRateLimits(): Promise<RateLimitInfo | null> {
     // 檢查緩存
@@ -29,7 +30,11 @@ export class RateLimitService {
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      this.logger.warn('ANTHROPIC_API_KEY not set, rate limits unavailable');
+      // 只警告一次
+      if (!this.hasWarnedNoApiKey) {
+        this.logger.warn('ANTHROPIC_API_KEY not set, rate limits unavailable');
+        this.hasWarnedNoApiKey = true;
+      }
       return this.getUnavailableInfo();
     }
 
