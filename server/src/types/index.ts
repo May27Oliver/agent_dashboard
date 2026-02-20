@@ -84,6 +84,7 @@ export interface WorkflowDefinition {
   id: string;
   name: string;
   steps: Omit<WorkflowStep, 'status'>[];
+  projectPath?: string; // 所屬專案路徑
 }
 
 export interface Workflow {

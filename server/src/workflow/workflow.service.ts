@@ -85,11 +85,11 @@ export class WorkflowService implements OnModuleInit {
     }));
   }
 
-  createWorkflow(
+  async createWorkflow(
     definition: WorkflowDefinition,
     onWorkflowUpdate: (workflow: Workflow) => void,
     onStepChange: (workflowId: string, step: WorkflowStep) => void,
-  ): Workflow {
+  ): Promise<Workflow> {
     const workflow: Workflow = {
       id: definition.id || uuidv4(),
       name: definition.name,
@@ -99,13 +99,24 @@ export class WorkflowService implements OnModuleInit {
       })),
       status: 'idle',
       createdAt: Date.now(),
+      projectPath: definition.projectPath, // 設置專案路徑
     };
 
     this.workflows.set(workflow.id, workflow);
     this.workflowCallbacks.set(workflow.id, onWorkflowUpdate);
     this.stepCallbacks.set(workflow.id, onStepChange);
 
-    // 保存到資料庫 (基本的 workflow 暫不保存，只保存 collaborative workflow)
+    // 保存到資料庫
+    if (definition.projectPath) {
+      const workflowEntity = this.workflowRepository.create({
+        id: workflow.id,
+        name: workflow.name,
+        featureName: workflow.name,
+        status: workflow.status,
+        projectPath: definition.projectPath,
+      });
+      await this.workflowRepository.save(workflowEntity);
+    }
 
     return workflow;
   }
@@ -507,6 +518,62 @@ export class WorkflowService implements OnModuleInit {
 
   getAllWorkflows(): Workflow[] {
     return Array.from(this.workflows.values());
+  }
+
+  /**
+   * 刪除 Workflow
+   * 同時清理相關的 agents、callbacks 和資料庫記錄
+   */
+  async deleteWorkflow(workflowId: string): Promise<{ success: boolean; deletedAgentIds: string[] }> {
+    const workflow = this.workflows.get(workflowId);
+    if (!workflow) {
+      return { success: false, deletedAgentIds: [] };
+    }
+
+    // 如果 workflow 正在運行，先停止它
+    if (workflow.status === 'running' || workflow.status === 'awaiting_approval') {
+      workflow.status = 'failed';
+    }
+
+    // 收集所有要刪除的 agent IDs
+    const agentIdsToDelete = new Set<string>();
+
+    // 1. 從 workflow steps 中收集
+    for (const step of workflow.steps) {
+      if (step.agentId) {
+        agentIdsToDelete.add(step.agentId);
+      }
+    }
+
+    // 2. 從 agentService 中查找所有屬於此 workflow 的 agents
+    const workflowAgents = this.agentService.getAgentsByWorkflowId(workflowId);
+    for (const agent of workflowAgents) {
+      agentIdsToDelete.add(agent.id);
+    }
+
+    // 刪除所有相關的 agents
+    const deletedAgentIds: string[] = [];
+    for (const agentId of agentIdsToDelete) {
+      try {
+        await this.agentService.removeAgent(agentId);
+        deletedAgentIds.push(agentId);
+        console.log(`[WorkflowService] Deleted agent: ${agentId}`);
+      } catch (e) {
+        // Agent 可能已經不存在，忽略錯誤
+      }
+    }
+
+    // 從記憶體中移除 workflow
+    this.workflows.delete(workflowId);
+    this.workflowCallbacks.delete(workflowId);
+    this.stepCallbacks.delete(workflowId);
+    this.approvalCallbacks.delete(workflowId);
+
+    // 從資料庫中刪除
+    await this.workflowRepository.delete(workflowId);
+
+    console.log(`[WorkflowService] Deleted workflow: ${workflowId} with ${deletedAgentIds.length} agents`);
+    return { success: true, deletedAgentIds };
   }
 
   /**

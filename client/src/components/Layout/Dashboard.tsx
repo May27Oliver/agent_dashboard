@@ -28,6 +28,7 @@ export function Dashboard() {
     createAgent,
     approveStep,
     rejectStep,
+    deleteWorkflow,
     listDirs,
   } = useSocket();
 
@@ -86,6 +87,7 @@ export function Dashboard() {
             onRemoveAgent={removeAgent}
             onRestartAgent={restartAgent}
             onCreateAgent={createAgent}
+            onDeleteWorkflow={deleteWorkflow}
             onClose={() => setSelectedWorkflow(null)}
           />
         ) : !isCreatingWorkflow ? (

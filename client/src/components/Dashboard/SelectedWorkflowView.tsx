@@ -26,6 +26,7 @@ export interface SelectedWorkflowViewProps {
   onRemoveAgent: (agentId: string) => void;
   onRestartAgent: (agentId: string) => void;
   onCreateAgent: (config: AgentConfig) => void;
+  onDeleteWorkflow: (workflowId: string) => void;
   onClose: () => void;
 }
 
@@ -52,12 +53,24 @@ function SelectedWorkflowViewComponent({
   onRemoveAgent,
   onRestartAgent,
   onCreateAgent,
+  onDeleteWorkflow,
   onClose,
 }: SelectedWorkflowViewProps) {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [showAddAgent, setShowAddAgent] = useState(false);
   const [newAgentRole, setNewAgentRole] = useState<AgentRole>('CUSTOM');
   const [newAgentName, setNewAgentName] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleDeleteWorkflow = () => {
+    if (showDeleteConfirm) {
+      onDeleteWorkflow(workflow.id);
+      onClose();
+    } else {
+      setShowDeleteConfirm(true);
+      setTimeout(() => setShowDeleteConfirm(false), 3000);
+    }
+  };
 
   const handleAddAgent = () => {
     if (!newAgentName.trim()) return;
@@ -106,6 +119,22 @@ function SelectedWorkflowViewComponent({
             <p className="text-xs text-slate-500 mt-1 ml-8 font-mono">{workflow.projectPath}</p>
           )}
         </div>
+
+        {/* Delete Workflow Button */}
+        <button
+          onClick={handleDeleteWorkflow}
+          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+            showDeleteConfirm
+              ? 'bg-red-600 hover:bg-red-500 text-white'
+              : 'bg-slate-700 hover:bg-red-600/80 text-slate-300 hover:text-white'
+          }`}
+          title={showDeleteConfirm ? 'Click again to confirm' : 'Delete workflow'}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          {showDeleteConfirm ? 'Confirm Delete' : 'Delete'}
+        </button>
       </div>
 
       {/* Workflow Steps */}

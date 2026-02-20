@@ -1,4 +1,4 @@
-import { useState, useEffect, memo, useCallback } from 'react';
+import { useState, memo, useCallback } from 'react';
 import { useSystemStore } from '@/store/systemStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useSocket } from '@/hooks/useSocket';

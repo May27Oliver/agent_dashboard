@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { TabType, ActiveProject } from '@/types';
+import type { TabType } from '@/types';
 
 interface UIState {
   activeTab: TabType;
