@@ -2,6 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAgentStore } from '@/store/agentStore';
 import { useSystemStore } from '@/store/systemStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { writeToTerminal } from '@/components/Terminal/XTerminal';
 import type {
   Agent,
@@ -11,7 +12,7 @@ import type {
   ApprovalRequest,
   SystemStats,
   EventLog,
-  UserSettings,
+  FullSettings,
 } from '@/types';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -103,6 +104,25 @@ export function useSocket() {
     socket.on('workflow:approvalRequired', (request: ApprovalRequest) => {
       useAgentStore.getState().addPendingApproval(request);
     });
+
+    // Settings events
+    socket.on('settings:updated', (settings: FullSettings) => {
+      useSettingsStore.getState().setSettings(settings);
+    });
+
+    // Request initial settings on connect
+    socket.on('connect', () => {
+      socket.emit('settings:get');
+    });
+
+    socket.on('settings:response', (settings: FullSettings) => {
+      useSettingsStore.getState().initFromServer(settings);
+    });
+
+    // If already connected, request settings immediately
+    if (socket.connected) {
+      socket.emit('settings:get');
+    }
 
     // No cleanup - socket persists for app lifetime
   }, []);
@@ -207,10 +227,10 @@ export function useSocket() {
     []
   );
 
-  const getSettings = useCallback((): Promise<UserSettings> => {
+  const getSettings = useCallback((): Promise<FullSettings> => {
     return new Promise((resolve) => {
       const socket = getSocket();
-      const handler = (settings: UserSettings) => {
+      const handler = (settings: FullSettings) => {
         socket.off('settings:response', handler);
         resolve(settings);
       };
@@ -219,7 +239,7 @@ export function useSocket() {
     });
   }, []);
 
-  const updateSettings = useCallback((settings: UserSettings) => {
+  const updateSettings = useCallback((settings: Partial<FullSettings>) => {
     getSocket().emit('settings:update', settings);
   }, []);
 

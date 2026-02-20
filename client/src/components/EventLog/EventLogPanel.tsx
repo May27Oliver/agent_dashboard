@@ -1,7 +1,8 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { useSystemStore } from '@/store/systemStore';
+import { useSettingsStore } from '@/store/settingsStore';
+import { useSocket } from '@/hooks/useSocket';
 import { EventLogEntry } from './EventLogEntry';
-import { getCollapsedState, setCollapsedState } from '@/utils/storage';
 
 interface EventLogPanelProps {
   maxHeight?: string;
@@ -9,14 +10,20 @@ interface EventLogPanelProps {
 
 export function EventLogPanel({ maxHeight = '150px' }: EventLogPanelProps) {
   const { logs, clearLogs } = useSystemStore();
+  const { updateSettings } = useSocket();
+  const getCollapsedState = useSettingsStore((state) => state.getCollapsedState);
+  const setCollapsedStateStore = useSettingsStore((state) => state.setCollapsedState);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isCollapsed, setIsCollapsed] = useState(
-    () => getCollapsedState()['event-log'] ?? false
+    () => getCollapsedState('event-log')
   );
 
-  useEffect(() => {
-    setCollapsedState('event-log', isCollapsed);
-  }, [isCollapsed]);
+  const handleToggleCollapse = useCallback(() => {
+    const newValue = !isCollapsed;
+    setIsCollapsed(newValue);
+    const partialUpdate = setCollapsedStateStore('event-log', newValue);
+    updateSettings(partialUpdate);
+  }, [isCollapsed, setCollapsedStateStore, updateSettings]);
 
   // Auto-scroll to bottom when new logs arrive (newest at top, so scroll to top)
   useEffect(() => {
@@ -25,14 +32,12 @@ export function EventLogPanel({ maxHeight = '150px' }: EventLogPanelProps) {
     }
   }, [logs]);
 
-  const toggleCollapse = () => setIsCollapsed(!isCollapsed);
-
   return (
     <div className="bg-slate-900/80 border-t border-slate-700/50">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2">
         <button
-          onClick={toggleCollapse}
+          onClick={handleToggleCollapse}
           className="flex items-center gap-2 hover:text-cyan-400 transition-colors focus:outline-none"
           aria-expanded={!isCollapsed}
           aria-controls="event-log-content"

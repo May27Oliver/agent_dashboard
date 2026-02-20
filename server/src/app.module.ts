@@ -4,7 +4,7 @@ import { AgentModule } from './agent/agent.module';
 import { WorkflowModule } from './workflow/workflow.module';
 import { SystemModule } from './system/system.module';
 import { AppController } from './app.controller';
-import { ProjectEntity, WorkflowEntity, AgentEntity } from './entities';
+import { ProjectEntity, WorkflowEntity, AgentEntity, UserSettingsEntity } from './entities';
 
 @Module({
   imports: [
@@ -15,7 +15,7 @@ import { ProjectEntity, WorkflowEntity, AgentEntity } from './entities';
       username: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
       database: process.env.DB_NAME || 'claude_cockpit',
-      entities: [ProjectEntity, WorkflowEntity, AgentEntity],
+      entities: [ProjectEntity, WorkflowEntity, AgentEntity, UserSettingsEntity],
       synchronize: true,
     }),
     SystemModule,

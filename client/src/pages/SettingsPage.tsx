@@ -1,49 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSocket } from '@/hooks/useSocket';
-import type { ClaudePlan, UserSettings } from '@/types';
-
-export interface Settings {
-  theme: 'dark' | 'light';
-  terminalFontSize: number;
-  autoScroll: boolean;
-  showTimestamps: boolean;
-  maxLogEntries: number;
-  socketUrl: string;
-  projectDirs: string[];
-}
-
-const defaultSettings: Settings = {
-  theme: 'dark',
-  terminalFontSize: 13,
-  autoScroll: true,
-  showTimestamps: true,
-  maxLogEntries: 100,
-  socketUrl: 'http://localhost:3001',
-  projectDirs: [
-    '~/Documents/learn',
-    '~/Documents/work',
-  ],
-};
-
-export function loadSettings(): Settings {
-  try {
-    const saved = localStorage.getItem('claude-cockpit-settings');
-    if (saved) {
-      return { ...defaultSettings, ...JSON.parse(saved) };
-    }
-  } catch {
-    // Failed to load settings, use defaults
-  }
-  return defaultSettings;
-}
-
-export function saveSettings(settings: Settings): void {
-  try {
-    localStorage.setItem('claude-cockpit-settings', JSON.stringify(settings));
-  } catch {
-    // Failed to save settings
-  }
-}
+import { useSettingsStore } from '@/store/settingsStore';
+import type { ClaudePlan, FullSettings } from '@/types';
 
 // Claude Plan 選項
 const CLAUDE_PLANS: { value: ClaudePlan; label: string; prompts: number }[] = [
@@ -53,68 +11,54 @@ const CLAUDE_PLANS: { value: ClaudePlan; label: string; prompts: number }[] = [
   { value: 'custom', label: '自訂', prompts: 0 },
 ];
 
+const DEFAULT_SETTINGS: Omit<FullSettings, 'id'> = {
+  theme: 'dark',
+  terminalFontSize: 13,
+  autoScroll: true,
+  showTimestamps: true,
+  maxLogEntries: 100,
+  socketUrl: 'http://localhost:3001',
+  projectDirs: ['~/Documents/learn', '~/Documents/work'],
+  activeProjects: [],
+  expandedActiveProjects: [],
+  claudePlan: 'max20',
+  customPromptLimit: null,
+  collapsedPanels: {},
+};
+
 export function SettingsPage() {
-  const [settings, setSettings] = useState<Settings>(loadSettings);
   const [saved, setSaved] = useState(false);
-  const { getSettings, updateSettings } = useSocket();
-
-  // Claude Plan 設定
-  const [claudeSettings, setClaudeSettings] = useState<UserSettings>({
-    claudePlan: 'max20',
-    customPromptLimit: undefined,
-  });
-  const [claudeSettingsLoading, setClaudeSettingsLoading] = useState(true);
-
-  // 載入 Claude 設定
-  useEffect(() => {
-    getSettings().then((settings) => {
-      setClaudeSettings(settings);
-      setClaudeSettingsLoading(false);
-    });
-  }, [getSettings]);
-
-  const updateClaudePlan = useCallback((plan: ClaudePlan) => {
-    const newSettings: UserSettings = {
-      ...claudeSettings,
-      claudePlan: plan,
-    };
-    setClaudeSettings(newSettings);
-    updateSettings(newSettings);
-    setSaved(true);
-  }, [claudeSettings, updateSettings]);
-
-  const updateCustomLimit = useCallback((limit: number) => {
-    const newSettings: UserSettings = {
-      ...claudeSettings,
-      customPromptLimit: limit,
-    };
-    setClaudeSettings(newSettings);
-    updateSettings(newSettings);
-    setSaved(true);
-  }, [claudeSettings, updateSettings]);
+  const { updateSettings: updateSettingsApi } = useSocket();
+  const settings = useSettingsStore((state) => state.settings);
+  const loading = useSettingsStore((state) => state.loading);
+  const updateSettingLocal = useSettingsStore((state) => state.updateSettingLocal);
 
   useEffect(() => {
     const timer = setTimeout(() => setSaved(false), 2000);
     return () => clearTimeout(timer);
   }, [saved]);
 
-  const updateSetting = <K extends keyof Settings>(
-    key: K,
-    value: Settings[K]
-  ) => {
-    setSettings((prev) => {
-      const newSettings = { ...prev, [key]: value };
-      saveSettings(newSettings);
-      setSaved(true);
-      return newSettings;
-    });
-  };
-
-  const resetSettings = () => {
-    setSettings(defaultSettings);
-    saveSettings(defaultSettings);
+  const updateSetting = useCallback(<K extends keyof FullSettings>(key: K, value: FullSettings[K]) => {
+    updateSettingLocal(key, value);
+    updateSettingsApi({ [key]: value });
     setSaved(true);
-  };
+  }, [updateSettingLocal, updateSettingsApi]);
+
+  const updateClaudePlan = useCallback((plan: ClaudePlan) => {
+    updateSetting('claudePlan', plan);
+  }, [updateSetting]);
+
+  const updateCustomLimit = useCallback((limit: number) => {
+    updateSetting('customPromptLimit', limit);
+  }, [updateSetting]);
+
+  const resetSettings = useCallback(() => {
+    updateSettingsApi(DEFAULT_SETTINGS);
+    setSaved(true);
+  }, [updateSettingsApi]);
+
+  // Use local settings or defaults while loading
+  const currentSettings = settings ?? { ...DEFAULT_SETTINGS, id: 'default' };
 
   return (
     <div className="h-full overflow-auto bg-slate-900/50 p-6">
@@ -137,7 +81,7 @@ export function SettingsPage() {
             <p className="text-xs text-slate-500 mb-4">
               選擇你的 Claude 方案以正確顯示 Prompt 使用量限制（每 5 小時窗口）
             </p>
-            {claudeSettingsLoading ? (
+            {loading ? (
               <div className="text-sm text-slate-500">Loading...</div>
             ) : (
               <div className="space-y-3">
@@ -145,7 +89,7 @@ export function SettingsPage() {
                   <label
                     key={plan.value}
                     className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                      claudeSettings.claudePlan === plan.value
+                      currentSettings.claudePlan === plan.value
                         ? 'bg-cyan-600/20 border border-cyan-500/50'
                         : 'bg-slate-700/30 border border-transparent hover:bg-slate-700/50'
                     }`}
@@ -154,7 +98,7 @@ export function SettingsPage() {
                       type="radio"
                       name="claudePlan"
                       value={plan.value}
-                      checked={claudeSettings.claudePlan === plan.value}
+                      checked={currentSettings.claudePlan === plan.value}
                       onChange={() => updateClaudePlan(plan.value)}
                       className="w-4 h-4 text-cyan-500 bg-slate-700 border-slate-600 focus:ring-cyan-500/50"
                     />
@@ -172,7 +116,7 @@ export function SettingsPage() {
                 ))}
 
                 {/* Custom limit input */}
-                {claudeSettings.claudePlan === 'custom' && (
+                {currentSettings.claudePlan === 'custom' && (
                   <div className="ml-7 mt-2">
                     <label className="flex items-center gap-2">
                       <span className="text-sm text-slate-400">Prompt 限制:</span>
@@ -180,7 +124,7 @@ export function SettingsPage() {
                         type="number"
                         min="1"
                         max="2000"
-                        value={claudeSettings.customPromptLimit ?? 100}
+                        value={currentSettings.customPromptLimit ?? 100}
                         onChange={(e) => updateCustomLimit(parseInt(e.target.value) || 100)}
                         className="w-24 bg-slate-700 border border-slate-600 rounded-md px-3 py-1.5 text-sm text-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                       />
@@ -204,7 +148,7 @@ export function SettingsPage() {
               description="Choose between dark and light mode"
             >
               <select
-                value={settings.theme}
+                value={currentSettings.theme}
                 onChange={(e) =>
                   updateSetting('theme', e.target.value as 'dark' | 'light')
                 }
@@ -224,14 +168,14 @@ export function SettingsPage() {
                   type="range"
                   min="10"
                   max="20"
-                  value={settings.terminalFontSize}
+                  value={currentSettings.terminalFontSize}
                   onChange={(e) =>
                     updateSetting('terminalFontSize', parseInt(e.target.value))
                   }
                   className="w-24"
                 />
                 <span className="text-sm text-slate-400 font-mono w-8">
-                  {settings.terminalFontSize}px
+                  {currentSettings.terminalFontSize}px
                 </span>
               </div>
             </SettingRow>
@@ -249,7 +193,7 @@ export function SettingsPage() {
               description="Automatically scroll to latest output"
             >
               <Toggle
-                enabled={settings.autoScroll}
+                enabled={currentSettings.autoScroll}
                 onChange={(value) => updateSetting('autoScroll', value)}
               />
             </SettingRow>
@@ -259,7 +203,7 @@ export function SettingsPage() {
               description="Display timestamps in event log"
             >
               <Toggle
-                enabled={settings.showTimestamps}
+                enabled={currentSettings.showTimestamps}
                 onChange={(value) => updateSetting('showTimestamps', value)}
               />
             </SettingRow>
@@ -272,7 +216,7 @@ export function SettingsPage() {
                 type="number"
                 min="50"
                 max="500"
-                value={settings.maxLogEntries}
+                value={currentSettings.maxLogEntries}
                 onChange={(e) =>
                   updateSetting('maxLogEntries', parseInt(e.target.value))
                 }
@@ -292,13 +236,13 @@ export function SettingsPage() {
               建立 Agent 時可選擇的工作目錄
             </p>
             <div className="space-y-2 mb-3">
-              {settings.projectDirs.map((dir, index) => (
+              {currentSettings.projectDirs.map((dir, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <input
                     type="text"
                     value={dir}
                     onChange={(e) => {
-                      const newDirs = [...settings.projectDirs];
+                      const newDirs = [...currentSettings.projectDirs];
                       newDirs[index] = e.target.value;
                       updateSetting('projectDirs', newDirs);
                     }}
@@ -306,7 +250,7 @@ export function SettingsPage() {
                   />
                   <button
                     onClick={() => {
-                      const newDirs = settings.projectDirs.filter((_, i) => i !== index);
+                      const newDirs = currentSettings.projectDirs.filter((_, i) => i !== index);
                       updateSetting('projectDirs', newDirs);
                     }}
                     className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors"
@@ -321,7 +265,7 @@ export function SettingsPage() {
             </div>
             <button
               onClick={() => {
-                updateSetting('projectDirs', [...settings.projectDirs, '~/Documents/']);
+                updateSetting('projectDirs', [...currentSettings.projectDirs, '~/Documents/']);
               }}
               className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-lg transition-colors flex items-center gap-1"
             >
@@ -345,7 +289,7 @@ export function SettingsPage() {
             >
               <input
                 type="text"
-                value={settings.socketUrl}
+                value={currentSettings.socketUrl}
                 onChange={(e) => updateSetting('socketUrl', e.target.value)}
                 className="w-48 bg-slate-700 border border-slate-600 rounded-md px-3 py-1.5 text-sm text-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />

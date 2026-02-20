@@ -1,12 +1,13 @@
-import { useState, useEffect, memo } from 'react';
+import { useState, useEffect, memo, useCallback } from 'react';
 import { useSystemStore } from '@/store/systemStore';
+import { useSettingsStore } from '@/store/settingsStore';
+import { useSocket } from '@/hooks/useSocket';
 import { AgentCard } from '@/components/Agent/AgentCard';
 import { WorkflowDiagram } from '@/components/Workflow/WorkflowDiagram';
 import { ApprovalPanel } from '@/components/Workflow/ApprovalPanel';
 import { SystemStatusPanel } from '@/components/System';
 import { TokenUsageDisplay } from './TokenUsageDisplay';
 import { PromptGauge } from './PromptGauge';
-import { getCollapsedState, setCollapsedState } from '@/utils/storage';
 import type { Workflow, Agent, ApprovalRequest, AGENT_ROLES } from '@/types';
 
 export interface DashboardOverviewProps {
@@ -36,15 +37,20 @@ function DashboardOverviewComponent({
   onRestartAgent,
 }: DashboardOverviewProps) {
   const { stats } = useSystemStore();
+  const { updateSettings } = useSocket();
+  const getCollapsedState = useSettingsStore((state) => state.getCollapsedState);
+  const setCollapsedStateStore = useSettingsStore((state) => state.setCollapsedState);
+
   const [isOverviewCollapsed, setIsOverviewCollapsed] = useState(
-    () => getCollapsedState()['overview'] ?? false
+    () => getCollapsedState('overview')
   );
 
-  useEffect(() => {
-    setCollapsedState('overview', isOverviewCollapsed);
-  }, [isOverviewCollapsed]);
-
-  const toggleOverviewCollapse = () => setIsOverviewCollapsed(!isOverviewCollapsed);
+  const handleToggleOverviewCollapse = useCallback(() => {
+    const newValue = !isOverviewCollapsed;
+    setIsOverviewCollapsed(newValue);
+    const partialUpdate = setCollapsedStateStore('overview', newValue);
+    updateSettings(partialUpdate);
+  }, [isOverviewCollapsed, setCollapsedStateStore, updateSettings]);
 
   return (
     <>
@@ -60,7 +66,7 @@ function DashboardOverviewComponent({
           <div className={`bg-slate-800/50 rounded-lg border border-slate-700/50 ${!isOverviewCollapsed ? 'min-h-[380px]' : ''}`}>
             {/* Collapsible header */}
             <button
-              onClick={toggleOverviewCollapse}
+              onClick={handleToggleOverviewCollapse}
               className="w-full flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors rounded-t-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:ring-inset"
               aria-expanded={!isOverviewCollapsed}
               aria-controls="overview-content"

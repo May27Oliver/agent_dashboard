@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAgentStore } from '@/store/agentStore';
-import { useUIStore, type ActiveProject } from '@/store/uiStore';
-import { loadSettings } from '@/pages/SettingsPage';
-import type { Workflow } from '@/types';
+import { useUIStore } from '@/store/uiStore';
+import { useSettingsStore } from '@/store/settingsStore';
+import { useSocket } from '@/hooks/useSocket';
+import type { Workflow, ActiveProject } from '@/types';
 
 interface WorkflowSidebarProps {
   onCreateWorkflow: (projectPath: string) => void;
@@ -44,18 +45,41 @@ const getWorkflowStatusColor = (status: Workflow['status']) => {
 };
 
 export function WorkflowSidebar({ onCreateWorkflow, onListDirs }: WorkflowSidebarProps) {
+  const { updateSettings } = useSocket();
   const workflows = useAgentStore((state) => state.workflows);
   const selectedWorkflowId = useUIStore((state) => state.selectedWorkflowId);
   const setSelectedWorkflow = useUIStore((state) => state.setSelectedWorkflow);
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
-  const activeProjects = useUIStore((state) => state.activeProjects);
-  const expandedActiveProjects = useUIStore((state) => state.expandedActiveProjects);
   const showAddProjectPanel = useUIStore((state) => state.showAddProjectPanel);
-  const addActiveProject = useUIStore((state) => state.addActiveProject);
-  const removeActiveProject = useUIStore((state) => state.removeActiveProject);
-  const toggleActiveProjectExpanded = useUIStore((state) => state.toggleActiveProjectExpanded);
   const setShowAddProjectPanel = useUIStore((state) => state.setShowAddProjectPanel);
+
+  // From settingsStore
+  const settings = useSettingsStore((state) => state.settings);
+  const addActiveProjectLocal = useSettingsStore((state) => state.addActiveProjectLocal);
+  const removeActiveProjectLocal = useSettingsStore((state) => state.removeActiveProjectLocal);
+  const toggleExpandedActiveProject = useSettingsStore((state) => state.toggleExpandedActiveProject);
+
+  const activeProjects = settings?.activeProjects ?? [];
+  const expandedActiveProjects = new Set(settings?.expandedActiveProjects ?? []);
+
+  const addActiveProject = useCallback((project: ActiveProject) => {
+    const partialUpdate = addActiveProjectLocal(project);
+    if (partialUpdate) {
+      updateSettings(partialUpdate);
+    }
+    setShowAddProjectPanel(false);
+  }, [addActiveProjectLocal, updateSettings, setShowAddProjectPanel]);
+
+  const removeActiveProject = useCallback((path: string) => {
+    const partialUpdate = removeActiveProjectLocal(path);
+    updateSettings(partialUpdate);
+  }, [removeActiveProjectLocal, updateSettings]);
+
+  const toggleActiveProjectExpanded = useCallback((path: string) => {
+    const partialUpdate = toggleExpandedActiveProject(path);
+    updateSettings(partialUpdate);
+  }, [toggleExpandedActiveProject, updateSettings]);
 
   const workflowArray = Array.from(workflows.values());
 
@@ -353,20 +377,19 @@ interface AddProjectPanelProps {
 }
 
 function AddProjectPanel({ onListDirs, activeProjects, onAdd, onCancel }: AddProjectPanelProps) {
-  const [projectDirs, setProjectDirs] = useState<string[]>([]);
+  const settings = useSettingsStore((state) => state.settings);
+  const projectDirs = settings?.projectDirs ?? [];
   const [selectedBaseDir, setSelectedBaseDir] = useState<string>('');
   const [projects, setProjects] = useState<{ name: string; path: string }[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [loadingProjects, setLoadingProjects] = useState(false);
 
-  // Load project directories from settings
+  // Set initial selected base directory
   useEffect(() => {
-    const settings = loadSettings();
-    setProjectDirs(settings.projectDirs);
-    if (settings.projectDirs.length > 0) {
-      setSelectedBaseDir(settings.projectDirs[0]);
+    if (projectDirs.length > 0 && !selectedBaseDir) {
+      setSelectedBaseDir(projectDirs[0]);
     }
-  }, []);
+  }, [projectDirs, selectedBaseDir]);
 
   // Load projects when base directory changes
   useEffect(() => {

@@ -9,8 +9,9 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { SystemService, EventLog } from './system.service';
-import { ClaudeUsageService, PromptUsageInfo, UserSettings } from './claude-usage.service';
+import { ClaudeUsageService, PromptUsageInfo } from './claude-usage.service';
 import { RateLimitService, RateLimitInfo } from './rate-limit.service';
+import { UserSettingsService, FullSettings } from './user-settings.service';
 
 export interface ClaudeUsageInfo {
   todayTokens: number;
@@ -50,6 +51,7 @@ export class SystemGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly systemService: SystemService,
     private readonly claudeUsageService: ClaudeUsageService,
     private readonly rateLimitService: RateLimitService,
+    private readonly userSettingsService: UserSettingsService,
   ) {
     // Start broadcasting stats every 2 seconds
     this.startStatsBroadcast();
@@ -125,28 +127,30 @@ export class SystemGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // 處理取得用戶設定請求
   @SubscribeMessage('settings:get')
-  handleGetSettings(@ConnectedSocket() client: Socket) {
-    const settings = this.claudeUsageService.getUserSettings();
+  async handleGetSettings(@ConnectedSocket() client: Socket) {
+    const settings = await this.userSettingsService.getSettings('default');
     client.emit('settings:response', settings);
     return settings;
   }
 
   // 處理更新用戶設定請求
   @SubscribeMessage('settings:update')
-  handleUpdateSettings(
-    @MessageBody() settings: UserSettings,
+  async handleUpdateSettings(
+    @MessageBody() partialSettings: Partial<FullSettings>,
     @ConnectedSocket() client: Socket,
   ) {
-    this.claudeUsageService.saveUserSettings(settings);
+    const settings = await this.userSettingsService.updateSettings('default', partialSettings);
     // 廣播設定更新給所有客戶端
     this.server.emit('settings:updated', settings);
-    // 記錄日誌
-    const log = this.systemService.addLog(
-      'info',
-      `Claude plan updated to: ${settings.claudePlan}`,
-      'settings',
-    );
-    this.server.emit('system:log', log);
+    // 記錄日誌（僅在 claudePlan 變更時）
+    if (partialSettings.claudePlan) {
+      const log = this.systemService.addLog(
+        'info',
+        `Claude plan updated to: ${settings.claudePlan}`,
+        'settings',
+      );
+      this.server.emit('system:log', log);
+    }
     return { success: true };
   }
 

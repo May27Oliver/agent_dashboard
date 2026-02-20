@@ -159,6 +159,31 @@ export interface UserSettings {
   customPromptLimit?: number;  // 自訂 prompt 限制
 }
 
+// Active Project
+export interface ActiveProject {
+  path: string;
+  name: string;
+  baseDir: string;
+  baseDirLabel: string;
+}
+
+// Full Settings (stored in database)
+export interface FullSettings {
+  id: string;
+  theme: 'dark' | 'light';
+  terminalFontSize: number;
+  autoScroll: boolean;
+  showTimestamps: boolean;
+  maxLogEntries: number;
+  socketUrl: string;
+  projectDirs: string[];
+  activeProjects: ActiveProject[];
+  expandedActiveProjects: string[];
+  claudePlan: ClaudePlan;
+  customPromptLimit: number | null;
+  collapsedPanels: Record<string, boolean>;
+}
+
 // Claude Usage (local usage stats)
 export interface ClaudeUsageInfo {
   todayTokens: number;
