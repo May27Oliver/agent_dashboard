@@ -1,0 +1,44 @@
+{
+  "name": "claude-cockpit-server",
+  "version": "1.0.0",
+  "description": "Claude Cockpit - Multi-Agent AI CLI Manager Server",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "start:dev": "ts-node -r tsconfig-paths/register src/main.ts",
+    "start:watch": "nodemon --watch src --ext ts --exec 'ts-node -r tsconfig-paths/register src/main.ts'",
+    "console": "ts-node -r tsconfig-paths/register src/console.ts"
+  },
+  "keywords": [
+    "claude",
+    "agent",
+    "pty",
+    "terminal"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@nestjs/common": "^11.1.13",
+    "@nestjs/core": "^11.1.13",
+    "@nestjs/platform-express": "^11.1.13",
+    "@nestjs/platform-socket.io": "^11.1.13",
+    "@nestjs/typeorm": "^11.0.0",
+    "@nestjs/websockets": "^11.1.13",
+    "node-pty": "^1.1.0",
+    "pg": "^8.18.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "socket.io": "^4.8.3",
+    "typeorm": "^0.3.28",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "@types/uuid": "^10.0.0",
+    "nodemon": "^3.1.11",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.9.3"
+  }
+}

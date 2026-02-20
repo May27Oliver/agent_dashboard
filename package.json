@@ -1,0 +1,22 @@
+{
+  "name": "claude-cockpit",
+  "version": "1.0.0",
+  "description": "Claude Cockpit - Multi-Agent AI CLI Manager",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && npm run start:dev",
+    "dev:client": "cd client && npm run dev",
+    "build": "npm run build:server && npm run build:client",
+    "build:server": "cd server && npm run build",
+    "build:client": "cd client && npm run build",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  },
+  "dependencies": {
+    "global": "^4.4.0",
+    "uipro-cli": "^2.2.3"
+  }
+}
