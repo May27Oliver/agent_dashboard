@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -14,11 +14,10 @@ interface SocketProviderProps {
 }
 
 export function SocketProvider({ children }: SocketProviderProps) {
-  // useRef 確保 socket 只創建一次，不會因為 re-render 重複創建
-  const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
-  if (!socketRef.current) {
-    socketRef.current = io(SOCKET_URL, {
+  useEffect(() => {
+    const newSocket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,
@@ -26,10 +25,21 @@ export function SocketProvider({ children }: SocketProviderProps) {
       reconnectionDelayMax: 5000,
       timeout: 20000,
     });
+
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.disconnect();
+    };
+  }, []);
+
+  // 等待 socket 建立完成
+  if (!socket) {
+    return null;
   }
 
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current }}>
+    <SocketContext.Provider value={{ socket }}>
       {children}
     </SocketContext.Provider>
   );

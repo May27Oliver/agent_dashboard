@@ -17,6 +17,8 @@ export class OutputBufferService implements OnModuleDestroy {
   private readonly MAX_BUFFER_SIZE = 4096; // 4KB
 
   private buffers = new Map<string, BufferEntry>();
+  // 暫存尚未註冊的 agent 輸出，待註冊後立即發送
+  private pendingData = new Map<string, string[]>();
 
   /**
    * 為 agent 註冊緩衝區
@@ -34,6 +36,15 @@ export class OutputBufferService implements OnModuleDestroy {
     };
 
     this.buffers.set(agentId, entry);
+
+    // 處理之前暫存的數據（agent 恢復時可能在註冊前就有輸出）
+    const pending = this.pendingData.get(agentId);
+    if (pending && pending.length > 0) {
+      const data = pending.join('');
+      this.pendingData.delete(agentId);
+      entry.buffer = data;
+      this.flush(agentId);
+    }
   }
 
   /**
@@ -60,8 +71,12 @@ export class OutputBufferService implements OnModuleDestroy {
   append(agentId: string, data: string): void {
     const entry = this.buffers.get(agentId);
     if (!entry) {
-      // 如果沒有註冊，直接發送（降級處理）
-      console.warn(`[OutputBuffer] Agent ${agentId} not registered, data sent immediately`);
+      // 暫存到待處理佇列，待 registerAgent 時再發送
+      // 這解決了 agent 恢復時輸出早於註冊的問題
+      if (!this.pendingData.has(agentId)) {
+        this.pendingData.set(agentId, []);
+      }
+      this.pendingData.get(agentId)!.push(data);
       return;
     }
 

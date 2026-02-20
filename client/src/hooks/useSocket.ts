@@ -136,15 +136,6 @@ export function useSocket() {
     socket.emit('settings:update', settings);
   }, [socket]);
 
-  // === Agent Subscription Actions ===
-  const subscribeAgent = useCallback((agentId: string) => {
-    socket.emit('agent:subscribe', agentId);
-  }, [socket]);
-
-  const unsubscribeAgent = useCallback((agentId: string) => {
-    socket.emit('agent:unsubscribe', agentId);
-  }, [socket]);
-
   return {
     socket,
     createAgent,
@@ -166,7 +157,5 @@ export function useSocket() {
     listDirs,
     getSettings,
     updateSettings,
-    subscribeAgent,
-    unsubscribeAgent,
   };
 }

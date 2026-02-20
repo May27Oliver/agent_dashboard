@@ -1,7 +1,6 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { useAgentSubscription } from '@/hooks/useAgentSubscription';
 import '@xterm/xterm/css/xterm.css';
 
 // 使用 Map 直接存儲終端實例，避免全域事件系統的效能問題
@@ -37,9 +36,6 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
   // Use refs to store callbacks to avoid re-initializing terminal
   const onInputRef = useRef(onInput);
   const onResizeRef = useRef(onResize);
-
-  // 訂閱此 agent 的輸出
-  useAgentSubscription(agentId);
 
   // Keep refs up to date
   useEffect(() => {
