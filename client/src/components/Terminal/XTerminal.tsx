@@ -3,6 +3,9 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
+// 使用 Map 直接存儲終端實例，避免全域事件系統的效能問題
+const terminalRegistry = new Map<string, Terminal>();
+
 interface XTerminalProps {
   agentId: string;
   onInput?: (data: string) => void;
@@ -63,7 +66,7 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
       lineHeight: 1.2,
       cursorBlink: true,
       cursorStyle: 'block',
-      scrollback: 10000,
+      scrollback: 2000, // 減少 scrollback 以節省記憶體
       convertEol: true,
     });
 
@@ -75,6 +78,9 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 
     xtermRef.current = terminal;
     fitAddonRef.current = fitAddon;
+
+    // 註冊到全域 registry，供 writeToTerminal 直接查找
+    terminalRegistry.set(agentId, terminal);
 
     // Send initial size to PTY after terminal is ready
     // Use requestAnimationFrame to ensure DOM is fully rendered
@@ -101,30 +107,11 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 
     return () => {
       resizeObserver.disconnect();
+      terminalRegistry.delete(agentId);
       terminal.dispose();
     };
   }, [agentId]); // Only re-initialize when agentId changes
 
-  // Listen for terminal write events
-  useEffect(() => {
-    const handler = (event: CustomEvent<{ agentId: string; data: string }>) => {
-      if (event.detail.agentId === agentId && xtermRef.current) {
-        xtermRef.current.write(event.detail.data);
-      }
-    };
-
-    window.addEventListener(
-      'terminal:write' as keyof WindowEventMap,
-      handler as EventListener
-    );
-
-    return () => {
-      window.removeEventListener(
-        'terminal:write' as keyof WindowEventMap,
-        handler as EventListener
-      );
-    };
-  }, [agentId]);
 
   // Expose focus and refresh methods to parent components
   useImperativeHandle(ref, () => ({
@@ -148,9 +135,10 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
   );
 });
 
-// Helper function to write to terminal from outside
+// 直接寫入終端，使用 O(1) 查找而非全域事件廣播
 export function writeToTerminal(agentId: string, data: string) {
-  window.dispatchEvent(
-    new CustomEvent('terminal:write', { detail: { agentId, data } })
-  );
+  const terminal = terminalRegistry.get(agentId);
+  if (terminal) {
+    terminal.write(data);
+  }
 }
