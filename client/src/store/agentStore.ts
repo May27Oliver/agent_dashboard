@@ -7,12 +7,14 @@ interface AgentState {
   workflows: Map<string, Workflow>;
   selectedAgentId: string | null;
   pendingApprovals: Map<string, ApprovalRequest>; // key: `${workflowId}-${stepId}`
+  restartedAgentId: string | null; // 記錄剛重啟的 agent，用於觸發終端 refresh
 
   // Agent actions
   addAgent: (agent: Agent) => void;
   updateAgent: (agent: Agent) => void;
   removeAgent: (agentId: string) => void;
   setSelectedAgent: (agentId: string | null) => void;
+  setRestartedAgentId: (agentId: string | null) => void;
   syncAgents: (agents: Agent[]) => void;
   syncWorkflows: (workflows: Workflow[]) => void;
 
@@ -42,6 +44,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   workflows: new Map(),
   selectedAgentId: null,
   pendingApprovals: new Map(),
+  restartedAgentId: null,
 
   addAgent: (agent) =>
     set((state) => {
@@ -80,6 +83,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     }),
 
   setSelectedAgent: (agentId) => set({ selectedAgentId: agentId }),
+
+  setRestartedAgentId: (agentId) => set({ restartedAgentId: agentId }),
 
   syncAgents: (agents) =>
     set((state) => {

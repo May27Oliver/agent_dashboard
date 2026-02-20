@@ -2,6 +2,7 @@ import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import { useAgentStore } from '@/store/agentStore';
 
 // 使用 Map 直接存儲終端實例，避免全域事件系統的效能問題
 const terminalRegistry = new Map<string, Terminal>();
@@ -37,11 +38,32 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
   const onInputRef = useRef(onInput);
   const onResizeRef = useRef(onResize);
 
+  // Subscribe to restartedAgentId for re-fitting terminal after restart
+  const restartedAgentId = useAgentStore((state) => state.restartedAgentId);
+
   // Keep refs up to date
   useEffect(() => {
     onInputRef.current = onInput;
     onResizeRef.current = onResize;
   }, [onInput, onResize]);
+
+  // Re-fit terminal when this agent is restarted
+  useEffect(() => {
+    if (restartedAgentId === agentId && fitAddonRef.current && xtermRef.current) {
+      // Delay to allow terminal to receive new output
+      const timeoutId = setTimeout(() => {
+        fitAddonRef.current?.fit();
+        const cols = xtermRef.current?.cols;
+        const rows = xtermRef.current?.rows;
+        if (cols !== undefined && rows !== undefined) {
+          onResizeRef.current?.(cols, rows);
+        }
+        // Clear the restarted state
+        useAgentStore.getState().setRestartedAgentId(null);
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [restartedAgentId, agentId]);
 
   useEffect(() => {
     if (!terminalRef.current) return;

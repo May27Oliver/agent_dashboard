@@ -76,6 +76,7 @@ export function useSocketEvents() {
 
     const handleAgentRestarted = (agent: Agent) => {
       useAgentStore.getState().updateAgent(agent);
+      useAgentStore.getState().setRestartedAgentId(agent.id);
     };
 
     const handleAgentOutput = (output: { agentId: string; data: string }) => {
