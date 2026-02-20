@@ -37,8 +37,8 @@ export class WorkflowGateway {
   ) {}
 
   @SubscribeMessage('workflow:create')
-  handleCreateWorkflow(@MessageBody() definition: WorkflowDefinition): Workflow {
-    const workflow = this.workflowService.createWorkflow(
+  async handleCreateWorkflow(@MessageBody() definition: WorkflowDefinition): Promise<Workflow> {
+    const workflow = await this.workflowService.createWorkflow(
       definition,
       (updatedWorkflow) => {
         this.server.emit('workflow:updated', updatedWorkflow);
@@ -207,6 +207,20 @@ export class WorkflowGateway {
       payload.comment,
       payload.retry,
     );
+  }
+
+  @SubscribeMessage('workflow:delete')
+  async handleDeleteWorkflow(@MessageBody() workflowId: string): Promise<boolean> {
+    const result = await this.workflowService.deleteWorkflow(workflowId);
+    if (result.success) {
+      // 通知前端 workflow 已刪除
+      this.server.emit('workflow:deleted', workflowId);
+      // 通知前端相關的 agents 也已刪除
+      for (const agentId of result.deletedAgentIds) {
+        this.server.emit('agent:removed', agentId);
+      }
+    }
+    return result.success;
   }
 
 }

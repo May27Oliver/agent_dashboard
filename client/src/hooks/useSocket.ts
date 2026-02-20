@@ -105,6 +105,10 @@ export function useSocket() {
       useAgentStore.getState().addPendingApproval(request);
     });
 
+    socket.on('workflow:deleted', (workflowId: string) => {
+      useAgentStore.getState().removeWorkflow(workflowId);
+    });
+
     // Settings events
     socket.on('settings:updated', (settings: FullSettings) => {
       useSettingsStore.getState().setSettings(settings);
@@ -209,6 +213,10 @@ export function useSocket() {
     []
   );
 
+  const deleteWorkflow = useCallback((workflowId: string) => {
+    getSocket().emit('workflow:delete', workflowId);
+  }, []);
+
   const listDirs = useCallback(
     (dirPath: string): Promise<{ name: string; path: string }[]> => {
       return new Promise((resolve) => {
@@ -260,6 +268,7 @@ export function useSocket() {
     createCollaborativeWorkflow,
     approveStep,
     rejectStep,
+    deleteWorkflow,
     listDirs,
     getSettings,
     updateSettings,

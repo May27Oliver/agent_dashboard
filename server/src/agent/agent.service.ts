@@ -174,6 +174,12 @@ export class AgentService implements OnModuleInit {
     return Array.from(this.agents.values()).map((instance) => instance.agent);
   }
 
+  getAgentsByWorkflowId(workflowId: string): Agent[] {
+    return Array.from(this.agents.values())
+      .map((instance) => instance.agent)
+      .filter((agent) => agent.workflowId === workflowId);
+  }
+
   async getAllAgentsFromDb(): Promise<Agent[]> {
     const entities = await this.agentRepository.find();
     return entities.map((entity) => ({

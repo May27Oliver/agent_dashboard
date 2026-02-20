@@ -23,6 +23,7 @@ interface AgentState {
   // Workflow actions
   addWorkflow: (workflow: Workflow) => void;
   updateWorkflow: (workflow: Workflow) => void;
+  removeWorkflow: (workflowId: string) => void;
   updateWorkflowStep: (workflowId: string, step: WorkflowStep) => void;
 
   // Approval actions
@@ -147,6 +148,22 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       const newWorkflows = new Map(state.workflows);
       newWorkflows.set(workflow.id, workflow);
       return { workflows: newWorkflows };
+    }),
+
+  removeWorkflow: (workflowId) =>
+    set((state) => {
+      const newWorkflows = new Map(state.workflows);
+      newWorkflows.delete(workflowId);
+
+      // 同時清理相關的 pending approvals
+      const newPendingApprovals = new Map(state.pendingApprovals);
+      for (const key of newPendingApprovals.keys()) {
+        if (key.startsWith(`${workflowId}-`)) {
+          newPendingApprovals.delete(key);
+        }
+      }
+
+      return { workflows: newWorkflows, pendingApprovals: newPendingApprovals };
     }),
 
   updateWorkflowStep: (workflowId, step) =>
